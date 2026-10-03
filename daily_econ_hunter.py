@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 import yfinance as yf
 from google import genai
 
-# 1. 환경 설정 (GitHub Secrets 금고에서 자동으로 불러옴)
+# 1. 환경 설정 (GitHub Secrets에서 자동 로드)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -73,7 +73,7 @@ def get_naver_market_reports():
         reports.append(f"리포트 수집 오류: {e}")
     return "\n".join(reports)
 
-# 3. AI 리포트 생성 모듈
+# 3. AI 리포트 생성 모듈 (작동 가능한 최신 Gemini 모델 자동 탐색)
 def generate_hunter_report(macro_data, news_data, report_data):
     client = genai.Client(api_key=GEMINI_API_KEY)
     today_str = datetime.now().strftime("%Y년 %m월 %d일")
@@ -111,11 +111,47 @@ def generate_hunter_report(macro_data, news_data, report_data):
 - 초보 투자자도 흔들리지 않도록 오늘 취해야 할 핵심 대응 포인트 3가지 정리
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.0-flash",
-        contents=prompt
-    )
-    return response.text
+    # 우선 시도할 최신 모델 목록
+    candidate_models = [
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3-pro-preview",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
+    ]
+
+    # 내 API 키에서 실제 지원하는 모델 목록을 조회해 후보에 자동 추가
+    try:
+        for m in client.models.list():
+            name = (getattr(m, "name", "") or "").replace("models/", "")
+            if name.startswith("gemini-") and not any(
+                skip in name for skip in [
+                    "gemini-2.5-flash", "2.0", "1.5", "embedding",
+                    "tts", "image", "audio", "veo", "robotics", "computer"
+                ]
+            ):
+                if name not in candidate_models:
+                    candidate_models.append(name)
+    except Exception as e:
+        print(f"모델 목록 조회 참고: {e}")
+
+    # 작동하는 모델이 나올 때까지 순서대로 실행
+    last_error = None
+    for model_name in candidate_models:
+        try:
+            print(f"모델 호출 시도 중: {model_name}")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if response and response.text:
+                print(f"리포트 생성 성공 (사용된 모델: {model_name})")
+                return response.text
+        except Exception as e:
+            print(f"{model_name} 건너뜀: {e}")
+            last_error = e
+
+    raise RuntimeError(f"사용 가능한 모델을 찾지 못했습니다. 마지막 오류: {last_error}")
 
 # 4. 텔레그램 발송 모듈
 def send_telegram_message(text):

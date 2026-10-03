@@ -112,7 +112,7 @@ def generate_hunter_report(macro_data, news_data, report_data):
 """
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.0-flash",
         contents=prompt
     )
     return response.text

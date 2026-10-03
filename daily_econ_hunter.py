@@ -21,15 +21,18 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # ==========================================
-# 2. 관심 종목 설정 (원하는 종목으로 언제든 추가/수정 가능)
+# 2. 관심 종목 설정 (네비우스 그룹 포함)
 # ==========================================
-# 한국 주식: 코스피는 '.KS', 코스닥은 '.KQ' / 미국 주식: 티커 그대로 입력
 WATCHLIST = {
-    "삼성전자우": "005935.KS",
     "삼성전자": "005930.KS",
+    "삼성전자우": "005935.KS",
     "SK하이닉스": "000660.KS",
-    "엠케이전자": "033160.KQ",
-    "네비우스 그룹": "NBIS",
+    "두산에너빌리티": "034020.KS",
+    "효성중공업": "298040.KS",
+    "삼현": "437730.KQ",
+    "로보티즈": "108490.KQ",
+    "SOXL(반도체3X)": "SOXL",
+    "네비우스 그룹": "NBIS"
 }
 
 MACRO_TICKERS = {
@@ -59,7 +62,7 @@ def setup_korean_font():
     plt.rcParams["axes.unicode_minus"] = False
 
 # ==========================================
-# 4. 매크로 및 관심 종목 데이터(RSI·이평선) 계산 모듈
+# 4. 매크로 및 관심 종목 지표 계산 모듈
 # ==========================================
 def get_macro_data():
     macro_list = []
@@ -124,7 +127,7 @@ def get_watchlist_data():
     return stock_rows, "\n".join(stock_text)
 
 # ==========================================
-# 5. 뉴스 및 증권사 리포트(시황+종목분석) 수집 모듈
+# 5. 뉴스 및 증권사 리포트 수집 모듈
 # ==========================================
 def get_economic_news():
     rss_urls = [
@@ -142,7 +145,6 @@ def get_economic_news():
     return "\n".join(news_list)
 
 def get_watchlist_news():
-    """관심 종목별 최신 구글 뉴스 RSS 수집"""
     watchlist_news = []
     for name in WATCHLIST.keys():
         clean_name = name.split("(")[0]
@@ -157,7 +159,6 @@ def get_watchlist_news():
     return "\n".join(watchlist_news)
 
 def get_naver_reports():
-    """네이버 증권 시황정보 리포트 + 종목분석 리포트(목표주가 포함) 수집"""
     headers = {"User-Agent": "Mozilla/5.0"}
     results = []
 
@@ -175,7 +176,7 @@ def get_naver_reports():
     except Exception:
         pass
 
-    # 2) 종목분석 리포트 (목표주가 및 투자의견)
+    # 2) 종목분석 리포트
     try:
         res2 = requests.get("https://finance.naver.com/research/company_list.naver", headers=headers, timeout=10)
         res2.encoding = "euc-kr"
@@ -197,18 +198,18 @@ def get_naver_reports():
     return "\n".join(results)
 
 # ==========================================
-# 6. 시각화된 차트 & 요약 표 이미지 생성 모듈
+# 6. 차트 & 요약 표 대시보드 이미지 생성 모듈
 # ==========================================
 def create_dashboard_image(macro_list, stock_rows):
     setup_korean_font()
-    fig = plt.figure(figsize=(12, 11), facecolor="#121826")
-    gs = fig.add_gridspec(2, 1, height_ratios=[1.1, 1.2], hspace=0.32)
+    fig = plt.figure(figsize=(12, 12), facecolor="#121826")
+    gs = fig.add_gridspec(2, 1, height_ratios=[1.1, 1.3], hspace=0.32)
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     fig.suptitle(f"⛏️ [곡괭이] 모닝 마켓 차트 & 관심종목 스코어보드 ({today_str})",
                  fontsize=18, fontweight="bold", color="#F8FAFC", y=0.96)
 
-    # [상단] 글로벌 지수 + 관심종목 일간 등락률 막대 차트
+    # [상단] 글로벌 지수 + 관심종목 등락률 가로 막대 차트
     ax1 = fig.add_subplot(gs[0])
     ax1.set_facecolor("#1E293B")
 
@@ -230,12 +231,11 @@ def create_dashboard_image(macro_list, stock_rows):
         ax1.text(x_pos + offset, bar.get_y() + bar.get_height()/2, f"{val:+.2f}%",
                  va="center", ha=ha, color="#F8FAFC", fontsize=9, fontweight="bold")
 
-    # 여백 조정
     if changes:
         min_c, max_c = min(changes), max(changes)
         ax1.set_xlim(min(min_c - 2.5, -2.0), max(max_c + 2.5, 2.0))
 
-    # [하단] 관심 종목 기술적 지표 & 수급 체크 요약 표
+    # [하단] 관심 종목 지표 요약 표
     ax2 = fig.add_subplot(gs[1])
     ax2.axis("off")
     ax2.set_title("관심 종목 핵심 지표 요약 표 (현재가 / 등락률 / RSI / 이평선 위치)",
@@ -262,7 +262,6 @@ def create_dashboard_image(macro_list, stock_rows):
         ]
         table_data.append(row)
 
-        # 셀 배경색 설정
         chg_color = "#3B1D2E" if s["chg_1d"] >= 0 else "#172554"
         rsi_color = "#14532D" if s["rsi"] <= 35 else ("#7F1D1D" if s["rsi"] >= 70 else "#1E293B")
         cell_colors.append(["#1E293B", "#1E293B", chg_color, "#1E293B", rsi_color, "#1E293B"])
@@ -277,8 +276,8 @@ def create_dashboard_image(macro_list, stock_rows):
             cellLoc="center"
         )
         table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.8)
+        table.set_fontsize(9.5)
+        table.scale(1, 1.7)
 
         for (row_idx, col_idx), cell in table.get_celld().items():
             cell.set_edgecolor("#475569")
@@ -295,9 +294,9 @@ def create_dashboard_image(macro_list, stock_rows):
 def generate_pickaxe_report(macro_text, stock_text, news_data, watchlist_news, report_data):
     client = genai.Client(api_key=GEMINI_API_KEY)
     today_str = datetime.now().strftime("%Y년 %m월 %d일")
+    watchlist_names_str = ", ".join(WATCHLIST.keys())
 
-    prompt = f"""
-당신은 시장의 소음 속에서 금맥처럼 진짜 돈이 되는 투자 맥락과 수급의 속내를 파헤치는 전문 경제·주식 브리핑 채널 **'곡괭이'**의 수석 애널리스트입니다.
+    prompt = f"""당신은 시장의 소음 속에서 금맥처럼 진짜 돈이 되는 투자 맥락과 수급의 속내를 파헤치는 전문 경제·주식 브리핑 채널 **'곡괭이'**의 수석 애널리스트입니다.
 단순 뉴스 나열을 피하고, **'표면적 뉴스 이면의 진짜 이유(Why)'**, **'월가와 외국인·기관 수급의 이동 경로'**, **'관심 종목의 기술적·모멘텀 진단'**을 날카롭고 명쾌하게 브리핑해 주세요.
 
 [오늘 날짜]: {today_str}
@@ -316,3 +315,110 @@ def generate_pickaxe_report(macro_text, stock_text, news_data, watchlist_news, r
 
 [5. 오늘 자 국내 증권사 시황 및 종목 분석 리포트]
 {report_data}
+
+---
+위 데이터를 종합하여 아래 양식으로 **⛏️ [곡괭이] 일일 경제·증시 심층 보고서**를 작성해 주세요.
+(텔레그램 모바일 화면에서 가독성이 높도록 기호를 깔끔하게 정리하고, 표는 반드시 코드블록 ``` 을 사용해 줄 맞춤이 깨지지 않게 작성해 주세요.)
+
+⛏️ **[곡괭이 모닝 브리핑] {today_str}**
+
+🎯 **1. 오늘의 금맥 헤드라인 3선**
+- (오늘 가장 중요한 핵심 이슈 3가지를 한 줄 요약)
+
+📊 **2. 한눈에 보는 매크로 & 관심 종목 요약 표**
+- 아래 항목을 모바일에서 보기 편한 고정폭 표(``` 코드블록 활용)로 깔끔하게 정리해 주세요:
+  1) 글로벌 핵심 지표 요약 표 (지수명 / 현재치 / 등락률 / 한줄 해석)
+  2) 관심 종목 스코어보드 표 (종목명 / 등락률 / RSI상태 / 핵심 모멘텀 한줄요약)
+
+🌍 **3. 월가 & 글로벌 매크로 속내 파헤치기**
+- 간밤 미국 증시(반도체·AI빅테크 등)와 금리·환율 움직임의 진짜 배경
+- 오늘 한국 증시(KOSPI) 주도 섹터와 외국인 수급 연결고리
+
+🔍 **4. [곡괭이 레이더] 관심 종목 집중 분석**
+- 수집된 관심 종목({watchlist_names_str})을 섹터별(반도체·AI인프라 / 원전·전력기기 / 로봇)로 묶어 분석해 주세요.
+- 각 종목의 **최신 뉴스·증권사 리포트 모멘텀**과 **현재 기술적 지표(RSI 과매도·과열 여부, 20일·120일선 위치)**를 결합해 구체적인 투자 포인트를 짚어주세요.
+
+📅 **5. 오늘 장 실전 체크리스트 3가지**
+- 오늘 장 시작 전·후로 투자자가 반드시 확인해야 할 핵심 대응 기준 3가지
+"""
+
+    candidate_models = [
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3-pro-preview",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
+    ]
+
+    try:
+        for m in client.models.list():
+            name = (getattr(m, "name", "") or "").replace("models/", "")
+            if name.startswith("gemini-") and not any(
+                skip in name for skip in [
+                    "gemini-2.5-flash", "2.0", "1.5", "embedding",
+                    "tts", "image", "audio", "veo", "robotics", "computer"
+                ]
+            ):
+                if name not in candidate_models:
+                    candidate_models.append(name)
+    except Exception:
+        pass
+
+    last_error = None
+    for model_name in candidate_models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            last_error = e
+
+    raise RuntimeError(f"사용 가능한 모델을 찾지 못했습니다: {last_error}")
+
+# ==========================================
+# 8. 텔레그램 이미지 + 텍스트 전송 모듈
+# ==========================================
+def send_telegram_photo(image_path, caption=""):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    with open(image_path, "rb") as img:
+        files = {"photo": img}
+        data = {"chat_id": TELEGRAM_CHAT_ID, "caption": caption}
+        requests.post(url, data=data, files=files)
+
+def send_telegram_message(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    chunk_size = 3800
+    for i in range(0, len(text), chunk_size):
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": text[i:i+chunk_size]
+        }
+        requests.post(url, data=payload)
+
+def main():
+    print("1. 글로벌 매크로 및 관심 종목 데이터 수집 중...")
+    macro_list, macro_text = get_macro_data()
+    stock_rows, stock_text = get_watchlist_data()
+
+    print("2. 뉴스 및 증권사 리포트(시황+종목) 수집 중...")
+    news_data = get_economic_news()
+    watchlist_news = get_watchlist_news()
+    report_data = get_naver_reports()
+
+    print("3. '곡괭이' 차트 & 요약 표 대시보드 이미지 생성 중...")
+    img_path = create_dashboard_image(macro_list, stock_rows)
+    send_telegram_photo(
+        img_path,
+        caption=f"⛏️ [곡괭이] {datetime.now().strftime('%Y-%m-%d')} 모닝 마켓 차트 & 관심종목 요약 표"
+    )
+
+    print("4. '곡괭이' 심층 분석 리포트 생성 및 전송 중...")
+    report = generate_pickaxe_report(macro_text, stock_text, news_data, watchlist_news, report_data)
+    send_telegram_message(report)
+    print("전체 프로세스 완료!")
+
+if __name__ == "__main__":
+    main()
